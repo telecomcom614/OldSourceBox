@@ -1,0 +1,49 @@
+name: Build SourceBox APK
+
+on:
+  workflow_dispatch:  # ручной запуск
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt update
+          sudo apt install -y python3-pip build-essential libsdl2-dev libfontconfig1-dev libfreetype6-dev libjpeg-dev libpng-dev zlib1g-dev libbz2-dev
+
+      - name: Setup Android NDK r10e
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r10e-linux-x86_64.zip
+          unzip -q android-ndk-r10e-linux-x86_64.zip
+          echo "ANDROID_NDK=$(pwd)/android-ndk-r10e" >> $GITHUB_ENV
+
+      - name: Configure and Build
+        run: |
+          pip3 install --upgrade pip
+          python3 waf configure -T release --android=armeabi-v7a,4.9,21
+          python3 waf build -p -v
+          python3 waf install
+
+      - name: Prepare APK artifact
+        run: |
+          mkdir -p artifact/lib/armeabi-v7a
+          cp build/hl2_android/*.so artifact/lib/armeabi-v7a/ 2>/dev/null || true
+          # Если нужен ещё и arm64-v8a, раскомментировать:
+          # mkdir -p artifact/lib/arm64-v8a
+          # cp build/hl2_android64/*.so artifact/lib/arm64-v8a/
+
+      - name: Upload APK library files
+        uses: actions/upload-artifact@v4
+        with:
+          name: sourcebox-libs
+          path: artifact/
